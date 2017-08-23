@@ -27,4 +27,5 @@ The process is super simple, and is basically identical to using any other Paper
 ## Future Plans
   * Wrap within gem for easy installation
   * Optimize pixel iteration to reduce number of loops. Can it be done without screwing with saliency patterns?
+  * Port and integrate face detection algorithm
   * Completely rewrite to favor deep neural networks? Benefits from more complicated criteria, and can be trained from professional data rather than guesses
