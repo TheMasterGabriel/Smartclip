@@ -9,11 +9,12 @@
 #   - Rank candidates using an importance function to focus the detail in the center and avoid it in the edges.
 #   - The highest ranking candidate is selected and is processed by Paperclip
 #
-# Initially written for The Glass Files in mind, I've abstracted away all the hardcoded specifics so it should work generically.
+# While initially written with The Glass Files in mind, I've abstracted away all the hardcoded specifics so it should work generically.
 # Images smaller than the desired thumbnail size are automatically padded with a border rather than being enlarged.
 #
 # The algorithm is based off of Jonas Wagner's work with smartcrop.js, which is a realtime Javascript-based image cropper
 # Author: Elias Gabriel
+# Active Repo: https://github.com/TheMasterGabriel/Smartclip
 #
 #
 # TODO:
