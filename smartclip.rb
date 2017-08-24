@@ -16,14 +16,6 @@
 # Author: Elias Gabriel
 # Active Repo: https://github.com/TheMasterGabriel/Smartclip
 #
-#
-# TODO:
-#   - Wrap within gem for easy installation
-#   - Optimize pixel iteration to reduce number of loops. Can it be done without screwing with saliency patterns?
-#   - Port and integrate face detection algorithm (this is going to be a pain I suspect)
-#   - Completely rewrite to favor deep neural networks? Benefits from more complicated criteria, and can be trained from professional data rather than guesses
-#
-#
 module Paperclip
 	class Smartclip < Processor
 		attr_accessor :geometry, :whiny, :auto_orient
@@ -49,8 +41,8 @@ module Paperclip
 			scoreDownSample: 8,
 			step: 8,
 			scaleStep: 0.1,
-			minScale: 0.85,
-			maxScale: 1.0,
+			minScale: 0.5,
+			maxScale: 1.5,
 			edgeRadius: 0.4,
 			edgeWeight: -20.0,
 			outsideImportance: -0.5,
@@ -80,20 +72,13 @@ module Paperclip
 				if @properties[:doFileOptimization]
 					# Optimize image format based on image properties to reduce file size and increase load time (micro-optimization much?):
 					#   - If it has no transparency make it a JPEG
-					#   - In any other case, make it a GIF
+					#   - In any other case, make it a PNG (we can ignore animation as this is a thumbnail)
+					#
+					# * Once WebP gets native integration for all modern browsers, this might change
 					opaque = identify("-format #{%[%[opaque]]} :source", :source => @source)
-					
-					puts opaque
-
-					if opaque == "True"
-						@current_format = '.jpg'
-					else
-						translucent = convert(":source -channel A -separate -format #{%[%[fx:z]]} info:-", :source => @source).to_i > 1
-						@current_format = translucent ? '.png' : '.gif'
-					end
+					@current_format = (opaque == "True" ? '.jpg' : '.png')
 				end
 
-				puts @current_format
 				@dst = TempfileFactory.new.generate([@basename, @current_format].join)
 				@dest = File.expand_path(@dst.path)
 
@@ -122,17 +107,18 @@ module Paperclip
 				parameters = []
 				parameters << ":source"
 				parameters << "-auto-orient" if @auto_orient
-
-				if @properties[:doFileOptimization]
-					parameters << "-strip -interlace PLANE"
-					parameters << "-sampling-factor 4:2:0 -colorspace RGB -quality 85" if @current_format != '.png'
-				end
-				
 				parameters << "-crop #{crop[:width]}x#{crop[:height]}+#{crop[:x]}+#{crop[:y]} +repage"
-				parameters << "-resize" << %["#{@properties[:resize_width]}x#{@properties[:resize_height]}\>"]
+				parameters << "-thumbnail" << %["#{@properties[:resize_width]}x#{@properties[:resize_height]}\>"]
 				parameters << "-background" << %["#{@properties[:backgroundColor]}"]
 				parameters << "-gravity center"
 				parameters << "-extent #{@properties[:resize_width]}x#{@properties[:resize_height]}"
+
+				if @properties[:doFileOptimization]
+					parameters << "-sampling-factor 4:2:0 -colorspace RGB -quality 60" if @current_format == '.jpg'
+					# parameters << "-depth 24 -define png:compression-filter=2 -define png:compression-level=9 -define png:compression-strategy=1" if @current_format == '.png'
+					parameters << "-interlace PLANE -strip"
+				end
+
 	     	   	parameters << ":dest"
 				parameters = parameters.flatten.compact.join(" ").strip.squeeze(" ")
 				convert(parameters, :source => @source, :dest => @dest)

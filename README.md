@@ -25,8 +25,11 @@ The process is super simple, and is basically identical to using any other Paper
   ```
 
 ## Future Plans
-  * Optimize the optimization by checking for in-use pixel bit depth rather than by extension specs. If a PNG is only using ON/OFF transparency, it doesn't need to be a PNG
   * Wrap within gem for easy installation
   * Optimize pixel iteration to reduce number of loops. Can it be done without screwing with saliency patterns?
   * Port and integrate face detection algorithm
   * Completely rewrite to favor deep neural networks? Benefits from more complicated criteria, and can be trained from professional data rather than guesses
+  * _Extract optimzation logic, along with what I've learned, to create separate image optmization processor?_
+
+## Found Bugs?
+If you found a bug, submit an issue. If you have some optimization insight, submit a Pull Request.
