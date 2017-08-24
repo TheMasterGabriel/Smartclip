@@ -25,6 +25,7 @@ The process is super simple, and is basically identical to using any other Paper
   ```
 
 ## Future Plans
+  * Optimize the optimization by checking for in-use pixel bit depth rather than by extension specs. If a PNG is only using ON/OFF transparency, it doesn't need to be a PNG
   * Wrap within gem for easy installation
   * Optimize pixel iteration to reduce number of loops. Can it be done without screwing with saliency patterns?
   * Port and integrate face detection algorithm
