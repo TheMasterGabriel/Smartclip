@@ -1,7 +1,7 @@
 # 
 # What is this? Smartclip is a contextually-aware paperclip processor that crops and scales your images to maximize aesthetic quality.
 # 
-# The algorithm is fairly simple:
+# The algorithm is fairly dumb:
 #   - Find edges
 #   - Find regions with a color like skin
 #   - Find regions high in saturation
@@ -12,13 +12,15 @@
 # While initially written with The Glass Files in mind, I've abstracted away all the hardcoded specifics so it should work generically.
 # Images smaller than the desired thumbnail size are automatically padded with a border rather than being enlarged.
 #
-# The algorithm is based off of Jonas Wagner's work with smartcrop.js, which is a realtime Javascript-based image cropper
+# The algorithm is fairly simple and is an adjusted a port of smartcrop.js by Jonas Wagner.
 # Author: Elias Gabriel
 # Active Repo: https://github.com/TheMasterGabriel/Smartclip
 #
 #
 # TODO:
+#   - Wrap within gem for easy installation
 #   - Optimize pixel iteration to reduce number of loops. Can it be done without screwing with saliency patterns?
+#   - Port and integrate face detection algorithm (this is going to be a pain I suspect)
 #   - Completely rewrite to favor deep neural networks? Benefits from more complicated criteria, and can be trained from professional data rather than guesses
 #
 #
@@ -29,6 +31,7 @@ module Paperclip
 			resize_width: 210,
 			resize_height: 210,
 			backgroundColor: "#222222",
+			doFileOptimization: true,
 			cropWidth: 0,
 			cropHeight: 0,
 			detailWeight: 0.2,
@@ -46,7 +49,7 @@ module Paperclip
 			scoreDownSample: 8,
 			step: 8,
 			scaleStep: 0.1,
-			minScale: 0.5,
+			minScale: 0.85,
 			maxScale: 1.0,
 			edgeRadius: 0.4,
 			edgeWeight: -20.0,
@@ -57,12 +60,12 @@ module Paperclip
 		def initialize(file, options = {}, attachment = nil)
 			super
 			@whiny = options.fetch(:whiny, true)
-			@current_format = File.extname(@file.path)
+			@current_format = File.extname(@file.path).downcase
 			@basename = File.basename(@file.path, @current_format)
 			@geometry = options.fetch(:file_geometry_parser, Geometry).from_file(@file)
 			@properties = PROPERTIES.dup.merge(options)
 
-			# Numberize all hash values?
+			# Numberize all hash values to avoid problems (or cause them if something is not correct)?
 
 			if @geometry.respond_to?(:auto_orient)
             	@geometry.auto_orient
@@ -70,17 +73,36 @@ module Paperclip
             end
 		end
 
-        def make
-      		filename = [@basename, @current_format].join
-      		@dst = TempfileFactory.new.generate(filename)
-			@dest = File.expand_path(@dst.path)
+		def make
+			@source = "#{File.expand_path(@file.path)}#{'[0]'}"  
 
-			begin				
+			begin
+				if @properties[:doFileOptimization]
+					# Optimize image format based on image properties to reduce file size and increase load time (micro-optimization much?):
+					#   - If it has no transparency make it a JPEG
+					#   - In any other case, make it a GIF
+					opaque = identify("-format #{%[%[opaque]]} :source", :source => @source)
+					
+					puts opaque
+
+					if opaque == "True"
+						@current_format = '.jpg'
+					else
+						translucent = convert(":source -channel A -separate -format #{%[%[fx:z]]} info:-", :source => @source).to_i > 1
+						@current_format = translucent ? '.png' : '.gif'
+					end
+				end
+
+				puts @current_format
+				@dst = TempfileFactory.new.generate([@basename, @current_format].join)
+				@dest = File.expand_path(@dst.path)
+
+				# Do all the crop calculations. Refer to the algorithm above for specifics
+				#   - Pixel bytes are processed by ImageMagick so that I don't have to deal with encoding headers; a sacrifice of processing time for sanity.
 				calculateDimensions
-				# I could read the bytes from the file itself, but I don't want to deal with encoding headers. So we don't, and sacrifice some processing time for sanity
 				bytes, * = convert(":source RGBA:-", :source => @dest)
 				@pixels = bytes.unpack("C*")
-				bytes.clear # Clear for memory consumption
+				bytes.clear
 				@opixels = Array.new(@geometry.width * @geometry.height * 4, 0)
 				edgeDetect
 				skinDetect
@@ -90,10 +112,22 @@ module Paperclip
 				crop[:height] /= @prescale
 				crop[:x] /= @prescale
 				crop[:y] /= @prescale
-				
+
+				# Construct ImageMagick convert command. The order of the sub-commands is important, and are as follows:
+				#   - Fix orientation
+				#   - Optimize by interlacing, stripping non-functional data and, if the thumbnail is a JPEG, by color data manipulation (if enabled)
+				#   - Crop to calculated offset
+				#   - Resize to calculated scale
+				#   - Add border if image is smaller than desired width or height
 				parameters = []
 				parameters << ":source"
 				parameters << "-auto-orient" if @auto_orient
+
+				if @properties[:doFileOptimization]
+					parameters << "-strip -interlace PLANE"
+					parameters << "-sampling-factor 4:2:0 -colorspace RGB -quality 85" if @current_format != '.png'
+				end
+				
 				parameters << "-crop #{crop[:width]}x#{crop[:height]}+#{crop[:x]}+#{crop[:y]} +repage"
 				parameters << "-resize" << %["#{@properties[:resize_width]}x#{@properties[:resize_height]}\>"]
 				parameters << "-background" << %["#{@properties[:backgroundColor]}"]
@@ -101,7 +135,7 @@ module Paperclip
 				parameters << "-extent #{@properties[:resize_width]}x#{@properties[:resize_height]}"
 	     	   	parameters << ":dest"
 				parameters = parameters.flatten.compact.join(" ").strip.squeeze(" ")
-				convert(parameters, :source => "#{File.expand_path(@file.path)}#{'[0]'}", :dest => @dest)
+				convert(parameters, :source => @source, :dest => @dest)
 		    rescue Cocaine::ExitStatusError => e
         		raise Paperclip::Error, "There was an error processing the thumbnail for #{@basename}\nError: #{e}" if @whiny
       		rescue Cocaine::CommandNotFoundError => e
@@ -111,24 +145,24 @@ module Paperclip
 			@dst
 		end
 
-		def target 
+		def target
     		@attachment.instance
     	end
 
 		def calculateDimensions
-            @scale = [@geometry.width / @properties[:resize_width], @geometry.height / @properties[:resize_height]].min
+			@scale = [@geometry.width / @properties[:resize_width], @geometry.height / @properties[:resize_height]].min
 			@properties[:cropWidth] = (@properties[:resize_width] * @scale).floor
 			@properties[:cropHeight] = (@properties[:resize_height] * @scale).floor
 			@properties[:minScale] = [@properties[:maxScale], [1 / @scale, @properties[:minScale]].max].min
 			@prescale = [[256 / @geometry.width, 256 / @geometry.height].max, 1].min
-			
+
 			if @prescale < 1
-				convert(":source #{"-auto-orient " if @auto_orient}-resize #{(@geometry.width * @prescale).floor}x#{(@geometry.height * @prescale).floor} :dest", :source => "#{File.expand_path(@file.path)}#{'[0]'}", :dest => @dest)
+				convert(":source #{"-auto-orient " if @auto_orient}-resize #{(@geometry.width * @prescale).floor}x#{(@geometry.height * @prescale).floor} :dest", :source => @source, :dest => @dest)
 				@geometry = options.fetch(:file_geometry_parser, Geometry).from_file(@dst)
 				@properties[:cropWidth] = (@properties[:cropWidth] * @prescale).floor
 				@properties[:cropHeight] = (@properties[:cropHeight] * @prescale).floor
 			else
-				convert(":source #{"-auto-orient " if @auto_orient}:dest", :source => "#{File.expand_path(@file.path)}#{'[0]'}", :dest => @dest)
+				convert(":source #{"-auto-orient " if @auto_orient}:dest", :source => @source, :dest => @dest)
 				@geometry = options.fetch(:file_geometry_parser, Geometry).from_file(@dst)
 				@prescale = 1;
 			end
