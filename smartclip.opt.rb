@@ -37,12 +37,12 @@ module Paperclip
 			saturationBrightnessMax: 0.9,
 			saturationThreshold: 0.4,
 			saturationBias: 0.2,
-			saturationWeight: 0.3,
+			saturationWeight: 0.1,
 			scoreDownSample: 8.0,
 			step: 8.0,
 			scaleStep: 0.1,
-			minScale: 0.5,
-			maxScale: 1.5,
+			minScale: 1.0,
+			maxScale: 1.0,
 			edgeRadius: 0.4,
 			edgeWeight: -20.0,
 			outsideImportance: -0.5,
@@ -245,7 +245,7 @@ module Paperclip
 							a += @opixels[j + 3]
 							mr = [mr, @opixels[j]].max
 							mg = [mg, @opixels[j + 1]].max
-							mb = [mb, @opixels[j + 2]].max
+							# mb = [mb, @opixels[j + 2]].max
 						end
 					end
 

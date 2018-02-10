@@ -20,12 +20,12 @@ module Paperclip
 	class Smartclip < Processor
 		attr_accessor :geometry, :whiny, :auto_orient
 		PROPERTIES = {
-			resize_width: 210,
-			resize_height: 210,
+			resize_width: 210.0,
+			resize_height: 210.0,
 			backgroundColor: "#222222",
 			doFileOptimization: true,
-			cropWidth: 0,
-			cropHeight: 0,
+			cropWidth: 0.0,
+			cropHeight: 0.0,
 			detailWeight: 0.2,
 			skinColor: [0.78, 0.57, 0.44],
 			skinBias: 0.01,
@@ -37,12 +37,12 @@ module Paperclip
 			saturationBrightnessMax: 0.9,
 			saturationThreshold: 0.4,
 			saturationBias: 0.2,
-			saturationWeight: 0.3,
-			scoreDownSample: 8,
-			step: 8,
+			saturationWeight: 0.1,
+			scoreDownSample: 8.0,
+			step: 8.0,
 			scaleStep: 0.1,
-			minScale: 0.5,
-			maxScale: 1.5,
+			minScale: 1.0,
+			maxScale: 1.0,
 			edgeRadius: 0.4,
 			edgeWeight: -20.0,
 			outsideImportance: -0.5,
@@ -271,7 +271,7 @@ module Paperclip
 							a += @opixels[j + 3]
 							mr = [mr, @opixels[j]].max
 							mg = [mg, @opixels[j + 1]].max
-							mb = [mb, @opixels[j + 2]].max
+							# mb = [mb, @opixels[j + 2]].max
 						end
 					end
 
