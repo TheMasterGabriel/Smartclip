@@ -1,3 +1,5 @@
+<img src="/smartclip.svg" width="128">
+
 # Smartclip
 Smartclip is a contextually-aware paperclip processor that crops and scales your images to maximize aesthetic quality.
 
